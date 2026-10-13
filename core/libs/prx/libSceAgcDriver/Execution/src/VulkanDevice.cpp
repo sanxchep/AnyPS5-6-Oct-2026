@@ -1331,13 +1331,18 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
         VkPhysicalDeviceProperties2 properties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &libraryProperties};
         state->InstanceFunction<PFN_vkGetPhysicalDeviceProperties2>("vkGetPhysicalDeviceProperties2")(selected, &properties);
         state->graphicsPipelineLibrary = libraryFeatures.graphicsPipelineLibrary == VK_TRUE && dynamicStateFeatures.extendedDynamicState == VK_TRUE && renderingFeatures.dynamicRendering == VK_TRUE && libraryProperties.graphicsPipelineLibraryFastLinking == VK_TRUE && properties.properties.limits.maxPushConstantsSize >= Graphics::PipelinePushConstantBytes;
-        if (state->graphicsPipelineLibrary) deviceExtensions.insert(deviceExtensions.end(), libraryExtensions.begin(), libraryExtensions.end());
         if (state->graphicsPipelineLibrary && hasExtension(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME)) {
             VkPhysicalDeviceDriverProperties driver{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
             VkPhysicalDeviceProperties2 driverProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &driver};
             state->InstanceFunction<PFN_vkGetPhysicalDeviceProperties2>("vkGetPhysicalDeviceProperties2")(selected, &driverProperties);
             state->pipelineLinkTimeOptimization = PipelineLinkTimeOptimizationUsable(driver.driverID);
+            // Fast-linked NVIDIA pipelines can run substantially slower than monolithic pipelines.
+            // Keep the library path available for comparing compilation latency.
+            if (!state->pipelineLinkTimeOptimization && std::getenv("APS5_FORCE_GPL") == nullptr) {
+                state->graphicsPipelineLibrary = false;
+            }
         }
+        if (state->graphicsPipelineLibrary) deviceExtensions.insert(deviceExtensions.end(), libraryExtensions.begin(), libraryExtensions.end());
     }
     renderingFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES_KHR, nullptr, VK_TRUE};
     libraryFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_GRAPHICS_PIPELINE_LIBRARY_FEATURES_EXT, &dynamicStateFeatures, VK_TRUE};
